@@ -62,24 +62,37 @@ def delete_all_files(folder_path):
             # If it's a directory, remove it recursively
             shutil.rmtree(item_path)
             
+# # Function to set a prompt template for generating a Python dictionary based on user input
+# def set_prompt_template(user_question):
+#     # Define the prompt template as a Python dictionary
+#     prompt_template = {
+#         'answer': f"Generate an answer to the question ({user_question}).",
+#         'bullet_points': 'Generate a Python list (4 points in a list separated by comma) emphasizing key details in the answer to improve understanding. Example: ["Point 1", "Point 2", "Point 3", "Point 4"]',
+#         'test_question': f"Generate a random question different from {user_question} to evaluate if the user understood the answer",
+#         'test_answer': 'Generate a test_answer which will be used to evaluate the user answer for the provided test_question.'
+#     }
+
+#     return json.dumps(prompt_template)
+
 # Function to set a prompt template for generating a Python dictionary based on user input
 def set_prompt_template(user_question):
     # Define the prompt template as a Python dictionary
-    prompt_template = {
-        'answer': f"Generate an answer to the question ({user_question}).",
-        'bullet_points': 'Generate a Python list (4 points in a list separated by comma) emphasizing key details in the answer to improve understanding. Example: ["Point 1", "Point 2", "Point 3", "Point 4"]',
-        'test_question': f"Generate a random question different from {user_question} to evaluate if the user understood the answer",
-        'test_answer': 'Generate a test_answer which will be used to evaluate the user answer for the provided test_question.'
-    }
+    prompt_template = f"Always return answers these 4 questions:\
+        1. Generate an answer to the question ({user_question}).\
+        2. Generate a Python list (4 points in a list separated by comma) emphasizing key details in the answer to improve understanding. Example: ['Point 1', 'Point 2', 'Point 3', 'Point 4']\
+        3. Generate a test question different from {user_question} to evaluate if the user understood the answer\
+        4. Generate a test_answer which will be used to evaluate the user answer for the provided test_question (on number 3).\
+    "
 
-    return json.dumps(prompt_template)
+    return prompt_template
 
 # Function to set an evaluation prompt template for comparing user answers to test answers
 def set_eval_prompt_template(user_answer, test_answer):
-    # Define the evaluation prompt template as a Python dictionary
-    eval_prompt_template = {
-        'knowledge_understood': f"Generate a boolean value indicating that the user understood the answer provided. That's when user answer ({user_answer}) is compare to the test answer ({test_answer}) previously generated. True if the user understood the answer, False if the user did not understand the answer.",
-        'knowledge_confidence': "Generate an integer value (in %) indicating how confident the evaluation is."
-    }
+    # Define the evaluation prompt template as a string
+    eval_prompt_template = f"Always return answers to these 2 questions:\
+        1. This is a boolean value indicating that the user understood the answer provided. That's when user answer ({user_answer}) is compared to the test answer ({test_answer}) previously generated. True if the user understood the answer, False if the user did not understand the answer.\
+        2. This is an integer value (in %) indicating how confident the evaluation is.\
+    "
 
-    return json.dumps(eval_prompt_template)
+    return eval_prompt_template
+

@@ -18,6 +18,7 @@ import pickle
 import shutil
 import json
 import psutil
+import ast
 
 import helper_func.helper_func as helper_func
 
@@ -100,7 +101,7 @@ def upload_pdf():
     # Set test_question_id to 0 in the session
     session['test_question_id'] = 0
 
-    session['shot'] = 0
+    # session['shot'] = 0
 
     # Return a JSON response indicating successful file upload and processing
     return jsonify({'message': 'Files uploaded and processed successfully'})
@@ -130,59 +131,69 @@ def query_document():
         verbose=False
     )
 
-    # # we create the RetrievalQA chain, passing in the vectorstore as our source of
-    # # information. Behind the scenes, this will only retrieve the relevant
-    # # data from the vectorstore, based on the semantic similiarity between
-    # # the prompt and the stored information
-    # qa_chain = RetrievalQA.from_chain_type(
-    #     llm=OpenAI(),
-    #     retriever=vectordb.as_retriever(search_kwargs={'k': 3}),
-    #     return_source_documents=True
-    # )
-
     # Extract user question from the request JSON data
     query_data = request.json
     user_question = query_data['question']
 
-    shot = session.get('shot')
-    if shot == 0:
-        # Generate a prompt based on the user question
-        query = helper_func.set_prompt_template(user_question)
-        shot += 1
-        session['shot'] = shot
-    else:
-        query = user_question
+    # shot = session.get('shot')
+    # if shot == 0:
+    # Generate a prompt based on the user question
+    query = helper_func.set_prompt_template(user_question)
+    # shot += 1
+    # session['shot'] = shot
+    # else:
+    #     query = user_question
 
     chat_history = []
     # Invoke the conversational retrieval process
     result = pdf_qa.invoke(
         {"question": query, "chat_history": chat_history})
 
-    # # we can now exectute queries againse our Q&A chain
-    # result = qa_chain.invoke({'query': query})
-    print(type(result['result']))
-    print(result['result'])
-
     results = str(result["answer"])
 
-    # Process the retrieved results
-    results = results.replace("'", '"')
+    # # Process the retrieved results
+    # results = results.replace("'", '"')
     
-    # Try to load the results as JSON and extract relevant fields
-    try:
-        results = json.loads(str(results))
-        answer = results["answer"]
-        bullet_points = results["bullet_points"]
-        test_question = results["test_question"]
-        test_answer = results["test_answer"]
-    # Handle exception if unable to extract fields from results
-    except:
-        answer = "Couldn't get the answer. Please try again"
-        bullet_points = ["Please try again"]
-        test_question = "Please try again"
-        test_answer = "Default test answer"
+    # # Try to load the results as JSON and extract relevant fields
+    # try:
+    #     results = json.loads(str(results))
+    #     answer = results["answer"]
+    #     bullet_points = results["bullet_points"]
+    #     test_question = results["test_question"]
+    #     test_answer = results["test_answer"]
+    # # Handle exception if unable to extract fields from results
+    # except:
+    #     answer = "Couldn't get the answer. Please try again"
+    #     bullet_points = ["Please try again"]
+    #     test_question = "Please try again"
+    #     test_answer = "Default test answer"
 
-    session['test_answer'] = test_answer
+    # session['test_answer'] = test_answer
+
+    try:
+        # Split the string by the numbers
+        sections = results.split('\n\n')
+
+        # Assign each section to a separate variable
+        answer = sections[0][3:].strip()  # Remove the numbering and leading/trailing whitespace
+        bullet_points = ast.literal_eval(sections[1][3:].strip())
+        test_question = sections[2][3:].strip()
+        test_answer = sections[3][12:].strip()  # Remove the "Test_answer: " prefix and leading/trailing whitespace
+
+    except (IndexError, ValueError) as e:
+        # Handle errors
+        print(f"An error occurred: {e}")
+        # Assign default values
+        answer = ""
+        bullet_points = []
+        test_question = ""
+        test_answer = ""
+
+    # Print the variables
+    print("Answer:", answer)
+    print("Bullet Points:", bullet_points)
+    print("Test Question:", test_question)
+    print("Test Answer:", test_answer)
 
     # Retrieve the test_question_id from the session or set to 0 if not present
     test_question_id = session.get('test_question_id')
@@ -243,18 +254,43 @@ def evaluate_understanding():
     # Replace single quotes with double quotes in the results string
     # results = results.replace("'", '"')
 
-    try:
-        # Parse the results as JSON and extract knowledge understanding and confidence
-        results = json.loads(results)
-        knowledge_understood = results["knowledge_understood"]
-        knowledge_confidence = results["knowledge_confidence"]
+    # try:
+    #     # Parse the results as JSON and extract knowledge understanding and confidence
+    #     results = json.loads(results)
+    #     knowledge_understood = results["knowledge_understood"]
+    #     knowledge_confidence = results["knowledge_confidence"]
 
-    except:
-        # Handle exceptions if unable to extract knowledge understanding and confidence
-        knowledge_understood = False
-        knowledge_confidence = "0"
+    # except:
+    #     # Handle exceptions if unable to extract knowledge understanding and confidence
+    #     knowledge_understood = False
+    #     knowledge_confidence = "0"
 
     print(results)
+
+    try:
+        # Split the string by comma
+        if (results.split(", ")) == 2:
+            values = results.split(", ")
+
+            # Convert knowledge_understood to bool
+            knowledge_understood = bool(values[0])
+
+            # Remove percentage sign and convert knowledge_confidence to int
+            knowledge_confidence = int(values[1].rstrip("%"))
+        else:
+            # Convert knowledge_understood to bool
+            knowledge_understood = bool(results)
+
+            knowledge_confidence = 0
+
+    except:
+        # Assign default values
+        knowledge_understood = False
+        knowledge_confidence = 0
+
+    print(knowledge_understood)  # Output: True
+    print(knowledge_confidence)  # Output: 90
+
 
     # Return the knowledge understood and confidence level in JSON format
     return jsonify({'knowledge_understood': knowledge_understood, \
