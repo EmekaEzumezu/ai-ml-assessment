@@ -11,10 +11,16 @@ from langchain_community.vectorstores import Chroma
 from langchain_openai import ChatOpenAI
 from langchain_openai import OpenAIEmbeddings
 
+from langchain.chains import RetrievalQA
+from langchain_openai import OpenAI
+
 import pickle
 import shutil
 import json
 import psutil
+
+import helper_func.helper_func as helper_func
+
 
 # Create a Flask application instance
 app = Flask(__name__)
@@ -36,59 +42,7 @@ UPLOAD_FOLDER = 'saved-var'
 
 # Load environment variables from a .env file
 load_dotenv('.env')
-
-# Function to save uploaded files to a specified upload folder
-def save_uploaded_files(uploaded_files, upload_folder):
-    # Iterate through each uploaded file
-    for file in uploaded_files:
-        # Save the file to the specified upload folder with its original filename
-        file.save(os.path.join(upload_folder, file.filename))
-
-# Function to delete all files and subdirectories in a specified folder
-def delete_all_files(folder_path):
-    # Get a list of all files and subdirectories in the specified folder
-    for item in os.listdir(folder_path):
-        item_path = os.path.join(folder_path, item)
-        # Check if the item is a file
-        if os.path.isfile(item_path):
-            # If it's a file, remove it
-            os.remove(item_path)
-        # Check if the item is a directory
-        elif os.path.isdir(item_path):
-            # If it's a directory, remove it recursively
-            shutil.rmtree(item_path)
             
-# Function to set a prompt template for generating a Python dictionary based on user input
-def set_prompt_template(user_question):
-    # Define the prompt template with placeholders for user input
-    prompt_template = """
-    To every question asked generate a Python dictionary with the following keys and values (the values will be as described):
-    {{
-        'answer': 'The answer provided by the system to the question ({user_question}) asked.',
-        'bullet_points': 'A Python list (4 points in a list separated by comma) emphasizing key details in the answer to improve understanding.',
-        'test_question': 'Generated question to evaluate if the user understood the answer',
-        'test_answer': 'This test_answer would be used to evaluate the user answer for the provided test_question.'
-    }}
-    """.format(user_question=user_question)
-
-    return prompt_template
-
-# Function to set an evaluation prompt template for comparing user answers to test answers
-def set_eval_prompt_template(user_answer, test_answer):
-    # Define the evaluation prompt template with placeholders for user and test answers
-    eval_prompt_template = """
-    To every question asked generate a Python dictionary that compares the answer given by a user to test his/her understanding of {user_answer} with the answer generated based on the document/context {test_answer}. Then 
-
-    {{
-    "knowledge_understood": "This is a boolean value indicating that the user understood the
-    answer provided. True if the user understood the answer, False if the user did not
-    understand the answer.",
-    “knowledge_confidence”: "This is an integer value (in %) indicating how confident the
-    evaluation is."
-    }}
-    """.format(user_answer=user_answer, test_answer=test_answer)
-
-    return eval_prompt_template
 
 # Route decorator for the home page
 @app.route('/')
@@ -107,7 +61,7 @@ def upload_pdf():
     # Retrieve the upload folder path from app config
     upload_folder = app.config['UPLOAD_FOLDER']
     # Save the uploaded files to the specified upload folder
-    save_uploaded_files(uploaded_files, upload_folder)
+    helper_func.save_uploaded_files(uploaded_files, upload_folder)
 
     documents = []
     # Iterate through files in the "docs" directory for processing
@@ -129,15 +83,15 @@ def upload_pdf():
         #     documents.extend(loader.load())
 
     # Delete uploaded files after processing
-    delete_all_files(upload_folder)
+    helper_func.delete_all_files(upload_folder)
 
     # Delete all files in the data folder
     data = app.config['DATA']
-    delete_all_files(data)
+    helper_func.delete_all_files(data)
 
     # Delete all files in the saved variable folder
     saved_var = app.config['SAVED_VAR']
-    delete_all_files(saved_var)
+    helper_func.delete_all_files(saved_var)
 
     # Serialize and save processed documents to a pickle file
     with open(os.path.join(UPLOAD_FOLDER, 'documents.pkl'), 'wb') as f:
@@ -145,6 +99,8 @@ def upload_pdf():
 
     # Set test_question_id to 0 in the session
     session['test_question_id'] = 0
+
+    session['shot'] = 0
 
     # Return a JSON response indicating successful file upload and processing
     return jsonify({'message': 'Files uploaded and processed successfully'})
@@ -174,17 +130,38 @@ def query_document():
         verbose=False
     )
 
+    # # we create the RetrievalQA chain, passing in the vectorstore as our source of
+    # # information. Behind the scenes, this will only retrieve the relevant
+    # # data from the vectorstore, based on the semantic similiarity between
+    # # the prompt and the stored information
+    # qa_chain = RetrievalQA.from_chain_type(
+    #     llm=OpenAI(),
+    #     retriever=vectordb.as_retriever(search_kwargs={'k': 3}),
+    #     return_source_documents=True
+    # )
+
     # Extract user question from the request JSON data
     query_data = request.json
     user_question = query_data['question']
 
-    # Generate a prompt based on the user question
-    query = set_prompt_template(user_question)
+    shot = session.get('shot')
+    if shot == 0:
+        # Generate a prompt based on the user question
+        query = helper_func.set_prompt_template(user_question)
+        shot += 1
+        session['shot'] = shot
+    else:
+        query = user_question
 
     chat_history = []
     # Invoke the conversational retrieval process
     result = pdf_qa.invoke(
         {"question": query, "chat_history": chat_history})
+
+    # # we can now exectute queries againse our Q&A chain
+    # result = qa_chain.invoke({'query': query})
+    print(type(result['result']))
+    print(result['result'])
 
     results = str(result["answer"])
 
@@ -253,7 +230,7 @@ def evaluate_understanding():
     test_answer = session.get('test_answer')
 
     # Generate a prompt based on the user's answer and test answer
-    query = set_eval_prompt_template(user_answer, test_answer)
+    query = helper_func.set_eval_prompt_template(user_answer, test_answer)
 
     chat_history = []
     # Invoke the conversational retrieval process
