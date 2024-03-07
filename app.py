@@ -213,20 +213,77 @@ def query_document():
     test_question_id += 1
     # Update the session with the new test_question_id
     session['test_question_id'] = test_question_id
-    
+
     # Return the retrieved answer, bullet points, test question, and test question ID in JSON format
     return jsonify({'answer': answer, \
                     'bullet_points': bullet_points, \
                     'test_question': test_question, \
                     'test_question_id': test_question_id})
 
+# Route decorator for handling evaluation requests with GET and POST methods
 @app.route('/evaluate/', methods=['GET','POST'])
+# Function to evaluate user understanding
 def evaluate_understanding():
-    # Implement evaluation logic here
 
+    # Load serialized documents from the pickle file
+    with open(os.path.join(UPLOAD_FOLDER, 'documents.pkl'), 'rb') as f:
+        documents = pickle.load(f)
 
+    # Split text into chunks for processing
+    text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=10)
+    documents = text_splitter.split_documents(documents)
+
+    # Create and persist a vector database for document retrieval
+    vectordb = Chroma.from_documents(documents, embedding=OpenAIEmbeddings(), persist_directory="./data")
+    vectordb.persist()
+
+    # Set up conversational retrieval with OpenAI model
+    pdf_qa = ConversationalRetrievalChain.from_llm(
+        ChatOpenAI(temperature=0.7, model_name='gpt-3.5-turbo'),
+        retriever=vectordb.as_retriever(search_kwargs={'k': 6}),
+        return_source_documents=True,
+        verbose=False
+    )
+
+    # Extract user's answer from the request JSON data
+    query_data = request.json
+    user_answer = query_data['answer']
+
+    # Retrieve the test answer from the session
+    test_answer = session.get('test_answer')
+
+    # Generate a prompt based on the user's answer and test answer
+    query = set_eval_prompt_template(user_answer, test_answer)
+
+    chat_history = []
+    # Invoke the conversational retrieval process
+    result = pdf_qa.invoke(
+        {"question": query, "chat_history": chat_history})
+
+    # Convert the answer from the result to a string
+    results = str(result["answer"])
+
+    # Replace single quotes with double quotes in the results string
+    # results = results.replace("'", '"')
+
+    try:
+        # Parse the results as JSON and extract knowledge understanding and confidence
+        results = json.loads(results)
+        knowledge_understood = results["knowledge_understood"]
+        knowledge_confidence = results["knowledge_confidence"]
+
+    except:
+        # Handle exceptions if unable to extract knowledge understanding and confidence
+        knowledge_understood = False
+        knowledge_confidence = "0"
+
+    print(results)
+
+    # Return the knowledge understood and confidence level in JSON format
     return jsonify({'knowledge_understood': knowledge_understood, \
                     'knowledge_confidence': knowledge_confidence})
 
+# Check if the script is being run directly as the main program
 if __name__ == '__main__':
+    # Run the Flask application in debug mode
     app.run(debug=True)
