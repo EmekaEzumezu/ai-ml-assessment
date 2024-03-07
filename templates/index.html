@@ -27,5 +27,75 @@
     <button onclick="evaluateUnderstanding()">Evaluate</button>
     <div id="evaluationResult"></div>
 
+    <script>
+        function uploadDocument(event) {
+            event.preventDefault();
+            var formData = new FormData();
+            var fileInput = document.getElementById('fileInput');
+            for (var i = 0; i < fileInput.files.length; i++) {
+                formData.append('files', fileInput.files[i]);
+            }
+
+            fetch('/upload/', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Display upload success message
+                alert(data.message); // You can also display this message in a specific element if needed
+                console.log(data);
+            })
+            .catch(error => console.error('Error:', error));
+        }
+
+        function queryDocument() {
+            var queryInput = document.getElementById('queryInput').value;
+
+            fetch('/query/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ question: queryInput })
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Display the query result
+                document.getElementById('queryResult').innerHTML = `
+                    <p>Answer: ${data.answer}</p>
+                    <ul>Bullet Points:
+                        ${data.bullet_points.map(point => `<li>${point}</li>`).join('')}
+                    </ul>
+                    <p>Test Question: ${data.test_question}</p>
+                    <p>Test Question ID: ${data.test_question_id}</p>
+                `;
+            })
+            .catch(error => console.error('Error:', error));
+        }
+
+        function evaluateUnderstanding() {
+            var evaluationInput = document.getElementById('evaluationInput').value;
+
+            fetch('/evaluate/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ answer: evaluationInput })
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Display the evaluation result
+                document.getElementById('evaluationResult').innerHTML = `
+                    <p>Knowledge Understood: ${data.knowledge_understood}</p>
+                    <p>Knowledge Confidence: ${data.knowledge_confidence}%</p>
+                `;
+            })
+            .catch(error => console.error('Error:', error));
+        }
+
+        document.getElementById('uploadForm').addEventListener('submit', uploadDocument);
+    </script>
 </body>
 </html>
