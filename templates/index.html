@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nurovant AI ML Assessment</title>
+</head>
+<body>
+    <h1>Nurovant AI ML Assessment</h1>
+
+    <!-- Form for uploading a document -->
+    <h2>Upload Document</h2>
+    <form id="uploadForm" enctype="multipart/form-data">
+        <input type="file" name="file" id="fileInput" accept=".pdf, .docx, .txt" multiple>
+        <button type="submit">Upload</button>
+    </form>
+
+    <!-- Form for querying the uploaded document -->
+    <h2>Query Document</h2>
+    <textarea id="queryInput" rows="4" cols="50" placeholder="Enter your question here"></textarea>
+    <button onclick="queryDocument()">Submit Query</button>
+    <div id="queryResult"></div>
+
+    <!-- Form for evaluating understanding -->
+    <h2>Evaluate Understanding</h2>
+    <textarea id="evaluationInput" rows="4" cols="50" placeholder="Enter your answer to the test question"></textarea>
+    <button onclick="evaluateUnderstanding()">Evaluate</button>
+    <div id="evaluationResult"></div>
+
+</body>
+</html>
