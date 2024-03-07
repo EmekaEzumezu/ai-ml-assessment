@@ -149,9 +149,72 @@ def upload_pdf():
     # Return a JSON response indicating successful file upload and processing
     return jsonify({'message': 'Files uploaded and processed successfully'})
 
+# Route decorator for querying documents with GET and POST methods
 @app.route('/query/', methods=['GET','POST'])
+# Function to handle document queries
 def query_document():
 
+    # Load serialized documents from the pickle file
+    with open(os.path.join(UPLOAD_FOLDER, 'documents.pkl'), 'rb') as f:
+        documents = pickle.load(f)
+
+    # Split text into chunks for processing
+    text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=10)
+    documents = text_splitter.split_documents(documents)
+
+    # Create and persist a vector database for document retrieval
+    vectordb = Chroma.from_documents(documents, embedding=OpenAIEmbeddings(), persist_directory="./data")
+    vectordb.persist()
+
+    # Set up conversational retrieval with OpenAI model
+    pdf_qa = ConversationalRetrievalChain.from_llm(
+        ChatOpenAI(temperature=0.7, model_name='gpt-3.5-turbo'),
+        retriever=vectordb.as_retriever(search_kwargs={'k': 6}),
+        return_source_documents=True,
+        verbose=False
+    )
+
+    # Extract user question from the request JSON data
+    query_data = request.json
+    user_question = query_data['question']
+
+    # Generate a prompt based on the user question
+    query = set_prompt_template(user_question)
+
+    chat_history = []
+    # Invoke the conversational retrieval process
+    result = pdf_qa.invoke(
+        {"question": query, "chat_history": chat_history})
+
+    results = str(result["answer"])
+
+    # Process the retrieved results
+    results = results.replace("'", '"')
+    
+    # Try to load the results as JSON and extract relevant fields
+    try:
+        results = json.loads(str(results))
+        answer = results["answer"]
+        bullet_points = results["bullet_points"]
+        test_question = results["test_question"]
+        test_answer = results["test_answer"]
+    # Handle exception if unable to extract fields from results
+    except:
+        answer = "Couldn't get the answer. Please try again"
+        bullet_points = ["Please try again"]
+        test_question = "Please try again"
+        test_answer = "Default test answer"
+
+    session['test_answer'] = test_answer
+
+    # Retrieve the test_question_id from the session or set to 0 if not present
+    test_question_id = session.get('test_question_id')
+    # Increment the test_question_id by 1
+    test_question_id += 1
+    # Update the session with the new test_question_id
+    session['test_question_id'] = test_question_id
+    
+    # Return the retrieved answer, bullet points, test question, and test question ID in JSON format
     return jsonify({'answer': answer, \
                     'bullet_points': bullet_points, \
                     'test_question': test_question, \
