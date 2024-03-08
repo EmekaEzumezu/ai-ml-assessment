@@ -96,6 +96,40 @@ def set_eval_prompt_template(user_answer, test_answer):
 
     return eval_prompt_template
 
+def process_data():
+    # Load serialized documents from the pickle file
+    with open(os.path.join(UPLOAD_FOLDER, 'documents.pkl'), 'rb') as f:
+        documents = pickle.load(f)
+
+    # Split text into chunks for processing
+    text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=10)
+    documents = text_splitter.split_documents(documents)
+
+    # Create and persist a vector database for document retrieval
+    vectordb = Chroma.from_documents(documents, embedding=OpenAIEmbeddings(), persist_directory="./data")
+    vectordb.persist()
+
+    # Set up conversational retrieval with OpenAI model
+    pdf_qa = ConversationalRetrievalChain.from_llm(
+        ChatOpenAI(temperature=0.7, model_name='gpt-3.5-turbo'),
+        retriever=vectordb.as_retriever(search_kwargs={'k': 6}),
+        return_source_documents=True,
+        verbose=False
+    )
+
+    return pdf_qa
+
+def get_query_results(pdf_qa, query):
+    chat_history = []
+    # Invoke the conversational retrieval process
+    result = pdf_qa.invoke(
+        {"question": query, "chat_history": chat_history})
+
+    results = str(result["answer"])
+
+    return results
+
+
 
 # # Define a model TestQuestion with id, question, and answer columns
 # class TestQuestion(db.Model):

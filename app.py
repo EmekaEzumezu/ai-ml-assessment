@@ -71,6 +71,7 @@ def upload_pdf():
     # Retrieve the upload folder path from app config
     upload_folder = app.config['UPLOAD_FOLDER']
     # Save the uploaded files to the specified upload folder
+    # (please check the helper function for implementations)
     helper_func.save_uploaded_files(uploaded_files, upload_folder)
 
     documents = []
@@ -93,6 +94,7 @@ def upload_pdf():
         #     documents.extend(loader.load())
 
     # Delete uploaded files after processing
+    # (please check the helper function for implementations)
     helper_func.delete_all_files(upload_folder)
 
     # # Delete all files in the data folder
@@ -100,6 +102,7 @@ def upload_pdf():
     # helper_func.delete_all_files(data)
 
     # Delete all files in the saved variable folder
+    # (please check the helper function for implementations)
     saved_var = app.config['SAVED_VAR']
     helper_func.delete_all_files(saved_var)
 
@@ -118,41 +121,21 @@ def upload_pdf():
 # Function to handle document queries
 def query_document():
 
-    # Load serialized documents from the pickle file
-    with open(os.path.join(UPLOAD_FOLDER, 'documents.pkl'), 'rb') as f:
-        documents = pickle.load(f)
-
-    # Split text into chunks for processing
-    text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=10)
-    documents = text_splitter.split_documents(documents)
-
-    # Create and persist a vector database for document retrieval
-    vectordb = Chroma.from_documents(documents, embedding=OpenAIEmbeddings(), persist_directory="./data")
-    vectordb.persist()
-
-    # Set up conversational retrieval with OpenAI model
-    pdf_qa = ConversationalRetrievalChain.from_llm(
-        ChatOpenAI(temperature=0.7, model_name='gpt-3.5-turbo'),
-        retriever=vectordb.as_retriever(search_kwargs={'k': 6}),
-        return_source_documents=True,
-        verbose=False
-    )
+    # Process data using a helper function and assign the result to pdf_qa variable
+    # (please check the helper function for implementations)
+    pdf_qa = helper_func.process_data()
 
     # Extract user question from the request JSON data
     query_data = request.json
     user_question = query_data['question']
 
     # Generate a prompt based on the user question
+    # (please check the helper function for implementations)
     query = helper_func.set_prompt_template(user_question)
 
-    chat_history = []
-    # Invoke the conversational retrieval process
-    result = pdf_qa.invoke(
-        {"question": query, "chat_history": chat_history})
-
-    results = str(result["answer"])
-
-    # session['test_answer'] = test_answer
+    # Get query results using a helper function based on the provided pdf_qa and query
+    # (please check the helper function for implementations)
+    results = helper_func.get_query_results(pdf_qa, query)
 
     try:
         sections = re.split(r'\b(?:1\.|2\.|3\.|4\.)\s*', results)
@@ -202,25 +185,9 @@ def query_document():
 # Function to evaluate user understanding
 def evaluate_understanding():
 
-    # Load serialized documents from the pickle file
-    with open(os.path.join(UPLOAD_FOLDER, 'documents.pkl'), 'rb') as f:
-        documents = pickle.load(f)
-
-    # Split text into chunks for processing
-    text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=10)
-    documents = text_splitter.split_documents(documents)
-
-    # Create and persist a vector database for document retrieval
-    vectordb = Chroma.from_documents(documents, embedding=OpenAIEmbeddings(), persist_directory="./data")
-    vectordb.persist()
-
-    # Set up conversational retrieval with OpenAI model
-    pdf_qa = ConversationalRetrievalChain.from_llm(
-        ChatOpenAI(temperature=0.7, model_name='gpt-3.5-turbo'),
-        retriever=vectordb.as_retriever(search_kwargs={'k': 6}),
-        return_source_documents=True,
-        verbose=False
-    )
+    # Process data using a helper function and assign the result to pdf_qa variable
+    # (please check the helper function for implementations)
+    pdf_qa = helper_func.process_data()
 
     # Extract user's answer from the request JSON data
     query_data = request.json
@@ -240,18 +207,15 @@ def evaluate_understanding():
     #     test_answer = None
 
     # Generate a prompt based on the user's answer and test answer
+    # (please check the helper function for implementations)
     query = helper_func.set_eval_prompt_template(user_answer, test_answer)
 
-    chat_history = []
-    # Invoke the conversational retrieval process
-    result = pdf_qa.invoke(
-        {"question": query, "chat_history": chat_history})
-
-    # Convert the answer from the result to a string
-    results = str(result["answer"])
+    # Get query results using a helper function based on the provided pdf_qa and query
+    # (please check the helper function for implementations)
+    results = helper_func.get_query_results(pdf_qa, query)
 
     try:
-        sections = re.split(r'\b(?:1\.|2\.|3\.|4\.)\s*', results)
+        sections = re.split(r'\b(?:1\.|2\.)\s*', results)
 
         # Remove empty parts
         sections = [part.strip() for part in sections if part.strip()]
