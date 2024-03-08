@@ -61,3 +61,10 @@ python app.py
 
 ### Conclusion
 While the project provides a basic setup for a multi-document reader and chatbot, it acknowledges that achieving a high-performing chatbot requires further exploration and optimization. Future enhancements could include refining prompt templates, experimenting with different LM models, creating agents to refine results, and more.
+
+### Screenshots
+
+![Screenshot-1.png](./img/Screenshot-1.png)
+
+![Screenshot-1.png](./img/Screenshot-2.png)
+
