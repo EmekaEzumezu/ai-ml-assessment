@@ -19,6 +19,7 @@ import shutil
 import json
 import psutil
 import ast
+import re
 
 import helper_func.helper_func as helper_func
 
@@ -169,20 +170,21 @@ def query_document():
     #     test_answer = "Default test answer"
 
     # session['test_answer'] = test_answer
+    print(results)
 
     try:
-        # Split the string by the numbers
-        sections = results.split('\n\n')
+        sections = re.split(r'\b(?:1\.|2\.|3\.|4\.)\s*', results)
+
+        # Remove empty parts
+        sections = [part.strip() for part in sections if part.strip()]
 
         # Assign each section to a separate variable
-        answer = sections[0][3:].strip()  # Remove the numbering and leading/trailing whitespace
-        bullet_points = ast.literal_eval(sections[1][3:].strip())
-        test_question = sections[2][3:].strip()
-        test_answer = sections[3][12:].strip()  # Remove the "Test_answer: " prefix and leading/trailing whitespace
+        answer = sections[0].strip()  # Remove the numbering and leading/trailing whitespace
+        bullet_points = ast.literal_eval(sections[1].strip())
+        test_question = sections[2].strip()
+        test_answer = sections[3].strip()  # Remove the "Test_answer: " prefix and leading/trailing whitespace
 
     except (IndexError, ValueError) as e:
-        # Handle errors
-        print(f"An error occurred: {e}")
         # Assign default values
         answer = ""
         bullet_points = []
@@ -268,20 +270,14 @@ def evaluate_understanding():
     print(results)
 
     try:
-        # Split the string by comma
-        if (results.split(", ")) == 2:
-            values = results.split(", ")
+        sections = re.split(r'\b(?:1\.|2\.|3\.|4\.)\s*', results)
 
-            # Convert knowledge_understood to bool
-            knowledge_understood = bool(values[0])
+        # Remove empty parts
+        sections = [part.strip() for part in sections if part.strip()]
 
-            # Remove percentage sign and convert knowledge_confidence to int
-            knowledge_confidence = int(values[1].rstrip("%"))
-        else:
-            # Convert knowledge_understood to bool
-            knowledge_understood = bool(results)
-
-            knowledge_confidence = 0
+        # Assign each section to a separate variable
+        knowledge_understood = bool(sections[0].strip())  # Remove the numbering and leading/trailing whitespace
+        knowledge_confidence = sections[1].strip()  # prefix and leading/trailing whitespace
 
     except:
         # Assign default values

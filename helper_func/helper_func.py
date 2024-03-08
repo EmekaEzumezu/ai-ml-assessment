@@ -90,8 +90,8 @@ def set_prompt_template(user_question):
 def set_eval_prompt_template(user_answer, test_answer):
     # Define the evaluation prompt template as a string
     eval_prompt_template = f"Always return answers to these 2 questions:\
-        1. This is a boolean value indicating that the user understood the answer provided. That's when user answer ({user_answer}) is compared to the test answer ({test_answer}) previously generated. True if the user understood the answer, False if the user did not understand the answer.\
-        2. This is an integer value (in %) indicating how confident the evaluation is.\
+        1. Generate a boolean value indicating that the user understood the answer provided. That's when user answer ({user_answer}) is compared to the test answer ({test_answer}) previously generated. True if the user understood the answer, False if the user did not understand the answer.\
+        2. Generate an integer value (in %), that's between 0-100, indicating how confident the evaluation is.\
     "
 
     return eval_prompt_template
