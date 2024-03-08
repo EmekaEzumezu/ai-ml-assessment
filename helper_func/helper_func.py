@@ -96,3 +96,18 @@ def set_eval_prompt_template(user_answer, test_answer):
 
     return eval_prompt_template
 
+
+# # Define a model TestQuestion with id, question, and answer columns
+# class TestQuestion(db.Model):
+#     id = db.Column(db.Integer, primary_key=True)  # Primary key column for the TestQuestion table
+#     question = db.Column(db.String(255), nullable=False)  # Column to store the question text
+#     answer = db.Column(db.String(255), nullable=False)  # Column to store the answer text
+
+#     def __repr__(self):
+#         return f'<TestQuestion {self.id}>'  # Representation method for TestQuestion model
+
+# # Define a model Question with id and answer_text columns
+# class Question(db.Model):
+#     id = db.Column(db.Integer, primary_key=True)  # Primary key column for the Question table
+#     answer_text = db.Column(db.String(255))  # Column to store the answer text            
+
