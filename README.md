@@ -49,7 +49,7 @@ It is not mandatory to deploy this application, just ensure the code is properly
 ```
 git clone git@github.com:smaameri/multi-doc-chatbot.git
 cd multi-doc-chatbot
-conda create --name myenv python=3.8
+conda create --name myenv python=3.9
 conda activate myenv
 pip install -r requirements.txt
 ```
