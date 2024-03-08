@@ -10,20 +10,22 @@ The expected response format for the following endpoints are indicated below, re
 
 1. “upload/” : Feel free to return the response based on your own discretion.
 2. “query/”: The json response should be as follows:
-```bash
+```
 {
     “answer”: “ ...”,
     “bullet_points”: [ ..., ..., ..., ...],
     “test_question”: “...”,
     “test_question_id:”...
 }
+```
 
 3. “evaluate/” :The json response should be as follows:
-```bash
+```
 {
     “knowledge_understood”: bool,
     “knowledge_confidence”: int
 }
+```
 
 Response definition for “query/”:
 
@@ -44,12 +46,13 @@ It is not mandatory to deploy this application, just ensure the code is properly
 
 ## Getting Started
 1. Clone the repository, set up the conda environment, and install the required packages:
-```bash
+```
 git clone git@github.com:smaameri/multi-doc-chatbot.git
 cd multi-doc-chatbot
 conda create --name myenv python=3.8
 conda activate myenv
 pip install -r requirements.txt
+```
 
 ### Store your OpenAI API key:
 1. Copy the example environment file: cp .env.example .env.
@@ -58,8 +61,9 @@ pip install -r requirements.txt
 ### Start chatting:
 Launch the the app, upload, and interact with your files. ctrl+c to exit the prompt at any time.
 
-```bash
+```
 python app.py
+```
 
 ### Conclusion
 While the project provides a basic setup for a multi-document reader and chatbot, it acknowledges that achieving a high-performing chatbot requires further exploration and optimization. Future enhancements could include refining prompt templates, experimenting with different LM models, creating agents to refine results, and more.
