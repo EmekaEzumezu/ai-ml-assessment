@@ -56,3 +56,6 @@ ul li {
 }
 
 /* Add more styles as needed */
+li {
+    list-style-type: disc; /* Use filled circles as bullet points */
+  }

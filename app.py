@@ -1,29 +1,24 @@
 import os
-import sys
 from dotenv import load_dotenv
 from flask import Flask, request, render_template, jsonify, session
-from langchain.chains import ConversationalRetrievalChain
 from langchain.text_splitter import CharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_community.document_loaders import Docx2txtLoader
 from langchain_community.document_loaders import TextLoader
 from langchain_community.vectorstores import Chroma
+from typing import List
+
+from langchain.prompts import PromptTemplate
+from langchain_core.output_parsers import JsonOutputParser
+from langchain_core.pydantic_v1 import BaseModel, Field
 from langchain_openai import ChatOpenAI
-from langchain_openai import OpenAIEmbeddings
 
-from langchain.chains import RetrievalQA
-from langchain_openai import OpenAI
-from flask_sqlalchemy import SQLAlchemy
-
+# from flask_sqlalchemy import SQLAlchemy
 import pickle
-import shutil
-import json
-import psutil
-import ast
-import re
-
+from docx import Document as DocxDocument
+import docx2txt
 import helper_func.helper_func as helper_func
-# from helper_func.helper_func import TestQuestion, Question
+
 
 
 # Create a Flask application instance
@@ -31,9 +26,6 @@ app = Flask(__name__)
 
 # Set the upload folder path for uploaded files
 app.config['UPLOAD_FOLDER'] = './docs/'
-
-# Set the data folder path for storing data
-app.config['DATA'] = './data/'
 
 # Set the saved variable folder path for saving variables
 app.config['SAVED_VAR'] = './saved-var/'
@@ -47,12 +39,71 @@ UPLOAD_FOLDER = 'saved-var'
 # Load environment variables from a .env file
 load_dotenv('.env')
 
-# Set the SQLALCHEMY_DATABASE_URI to connect to a SQLite database named test_answers.db
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///test_answers.db'
+# # Set the SQLALCHEMY_DATABASE_URI to connect to a SQLite database named test_answers.db
+# app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///test_answers.db'
 
-# Initialize the SQLAlchemy object using the Flask app
-db = SQLAlchemy(app)
+# # Initialize the SQLAlchemy object using the Flask app
+# db = SQLAlchemy(app)
 
+
+class DocxLoader:
+    def __init__(self, file_path):
+        self.file_path = file_path
+
+    def load(self):
+        doc = DocxDocument(self.file_path)
+        return [para.text for para in doc.paragraphs]
+
+class DocLoader:
+    def __init__(self, file_path):
+        self.file_path = file_path
+
+    def load(self):
+        return [docx2txt.process(self.file_path)]
+    
+class TxtLoader:
+    def __init__(self, file_path):
+        self.file_path = file_path
+
+    def load(self):
+        with open(self.file_path, 'r', encoding='utf-8') as file:
+            return [line.strip() for line in file.readlines()]
+
+
+##########################################################
+# GLOBAL VARIABLES
+# Define a global variable to store the test_question_id
+test_question_id = 0
+
+# Declare global variables
+glo_test_question = None
+glo_test_answer = None
+
+def store_data(question, answer):
+    # Access the global variables and store the data
+    global glo_test_question, glo_test_answer
+    glo_test_question = question
+    glo_test_answer = answer
+
+def retrieve_data():
+    # Access the global variables and retrieve the data
+    global glo_test_question, glo_test_answer
+    return glo_test_question, glo_test_answer
+
+
+# Declare global variable
+glo_test_question_id = 0
+
+def increment_test_question_id():
+    # Access the global variable and increment by 1
+    global glo_test_question_id
+    glo_test_question_id += 1
+
+def retrieve_test_question_id():
+    # Access the global variable and retrieve the value
+    global glo_test_question_id
+    return glo_test_question_id
+#################################################################
 
 # Route decorator for the home page
 @app.route('/')
@@ -74,32 +125,42 @@ def upload_pdf():
     # (please check the helper function for implementations)
     helper_func.save_uploaded_files(uploaded_files, upload_folder)
 
+    # Assuming documents is a list to store loaded document contents
     documents = []
-    # Iterate through files in the "docs" directory for processing
-    for file in os.listdir("docs"):
-        # Load PDF files
+
+    # Directory containing documents
+    docs_dir = "./docs"
+
+    # Iterate through files in the directory
+    for file in os.listdir(docs_dir):
+        file_path = os.path.join(docs_dir, file)
+        
+        # Load PDF documents
         if file.endswith(".pdf"):
-            pdf_path = "./docs/" + file
-            loader = PyPDFLoader(pdf_path)
+            loader = PyPDFLoader(file_path)
             documents.extend(loader.load())
-        # Load Word documents
-        elif file.endswith('.docx') or file.endswith('.doc'):
-            doc_path = "./docs/" + file
-            loader = Docx2txtLoader(doc_path)
+        
+        # Load DOCX documents
+        elif file.endswith('.docx'):
+            loader = DocxLoader(file_path)
             documents.extend(loader.load())
-        # Load Txt documents
-        # elif file.endswith('.txt'):
-        #     text_path = "./docs/" + file
-        #     loader = TextLoader(text_path)
-        #     documents.extend(loader.load())
+        
+        # Load DOC documents
+        elif file.endswith('.doc'):
+            loader = DocLoader(file_path)
+            documents.extend(loader.load())
+
+        # Load TXT documents
+        elif file.endswith('.txt'):
+            loader = TxtLoader(file_path)
+            documents.extend(loader.load())
+
+        else:
+            return jsonify({'message': 'File(s) not supported'})
 
     # Delete uploaded files after processing
     # (please check the helper function for implementations)
     helper_func.delete_all_files(upload_folder)
-
-    # # Delete all files in the data folder
-    # data = app.config['DATA']
-    # helper_func.delete_all_files(data)
 
     # Delete all files in the saved variable folder
     # (please check the helper function for implementations)
@@ -120,120 +181,107 @@ def upload_pdf():
 @app.route('/query/', methods=['GET','POST'])
 # Function to handle document queries
 def query_document():
+    # Load serialized documents from the pickle file
+    with open(os.path.join(UPLOAD_FOLDER, 'documents.pkl'), 'rb') as f:
+        documents = pickle.load(f)
 
-    # Process data using a helper function and assign the result to pdf_qa variable
-    # (please check the helper function for implementations)
-    pdf_qa = helper_func.process_data()
+    model = ChatOpenAI(temperature=0)
+
+    class QatQuery(BaseModel):
+        answer: str = Field(description="The answer provided by the system to the question asked")
+        bullet_points: list = Field(description="A list of bullet points emphasizing key details in the answer to improve understanding")
+        test_question: str = Field(description="Generated question to evaluate if the user understood the answer provided")
+        test_answer: str = Field(description="Generate an answer which will be used to evaluate the user answer for the generated question")
+
+    # Set up a parser + inject instructions into the prompt template.
+    parser = JsonOutputParser(pydantic_object=QatQuery)
+
+    prompt = PromptTemplate(
+        template="Answer the user query.\n{context}\n{format_instructions}\n{query}\n",
+        input_variables=["query"],
+        partial_variables={"format_instructions": parser.get_format_instructions(), "context": documents},
+    )
+
+    chain = prompt | model | parser
 
     # Extract user question from the request JSON data
     query_data = request.json
     user_question = query_data['question']
 
-    # Generate a prompt based on the user question
-    # (please check the helper function for implementations)
-    query = helper_func.set_prompt_template(user_question)
-
-    # Get query results using a helper function based on the provided pdf_qa and query
-    # (please check the helper function for implementations)
-    results = helper_func.get_query_results(pdf_qa, query)
-
     try:
-        sections = re.split(r'\b(?:1\.|2\.|3\.|4\.)\s*', results)
-
-        # Remove empty parts
-        sections = [part.strip() for part in sections if part.strip()]
-
-        # Assign each section to a separate variable
-        answer = sections[0].strip()  # Remove the numbering and leading/trailing whitespace
-        bullet_points = ast.literal_eval(sections[1].strip())
-        test_question = sections[2].strip()
-        test_answer = sections[3].strip()  # Remove the "Test_answer: " prefix and leading/trailing whitespace
-
-    except (IndexError, ValueError) as e:
-        # Assign default values
-        answer = ""
-        bullet_points = []
-        test_question = ""
-        test_answer = ""
-
-    # Retrieve the test_question_id from the session or set to 0 if not present
-    test_question_id = session.get('test_question_id')
-    # Increment the test_question_id by 1
-    test_question_id += 1
-    # Update the session with the new test_question_id
-    session['test_question_id'] = test_question_id
+        result = chain.invoke({"query": user_question})
+    except Exception as e:
+        result={}
+        result['answer'] = ""
+        result['bullet_points'] = []
+        result['test_question'] = ""
+        result['test_answer'] = ""
 
 
-    # # Create a new TestQuestion object with the provided question and answer
-    # test_question = TestQuestion(question=test_question, answer=test_answer)
+    store_data(result['test_question'], result['test_answer'])
 
-    # # Add the newly created test_question object to the current session for database operation
-    # db.session.add(test_question)
+    increment_test_question_id()
 
-    # # Commit (save) the changes made (adding the test_question) to the database
-    # db.session.commit()
-
+    test_question_id = retrieve_test_question_id()
 
     # Return the retrieved answer, bullet points, test question, and test question ID in JSON format
-    return jsonify({'answer': answer, \
-                    'bullet_points': bullet_points, \
-                    'test_question': test_question, \
+    return jsonify({'answer': result['answer'], \
+                    'bullet_points': result['bullet_points'], \
+                    'test_question': result['test_question'], \
                     'test_question_id': test_question_id})
 
 # Route decorator for handling evaluation requests with GET and POST methods
 @app.route('/evaluate/', methods=['GET','POST'])
 # Function to evaluate user understanding
 def evaluate_understanding():
+    # Load serialized documents from the pickle file
+    with open(os.path.join(UPLOAD_FOLDER, 'documents.pkl'), 'rb') as f:
+        documents = pickle.load(f)
 
-    # Process data using a helper function and assign the result to pdf_qa variable
-    # (please check the helper function for implementations)
-    pdf_qa = helper_func.process_data()
+    model = ChatOpenAI(temperature=0)
+
+    class QatEvaluate(BaseModel):
+        knowledge_understood: bool = Field(description="This is a boolean value indicating that the user understood the answer provided. \
+                                           True if the user understood the answer, False if the user did not understand the answer")
+        knowledge_confidence: int = Field(description="This is an integer value (in %) indicating how confident the evaluation is.")
+
+    # Set up a parser + inject instructions into the prompt template.
+    parser = JsonOutputParser(pydantic_object=QatEvaluate)
+
+    prompt = PromptTemplate(
+        # template="Answer the user query.\n{context}\n{format_instructions}\n{query}\n",
+        template="This {test_answer} would be used to evaluate the user {answer} for the provided {test_question}.\n{context}\n{format_instructions}\n",
+        input_variables=["answer", "test_question", "test_answer"],
+        partial_variables={"format_instructions": parser.get_format_instructions(), "context": documents},
+    )
+
+    chain = prompt | model | parser
 
     # Extract user's answer from the request JSON data
     query_data = request.json
     user_answer = query_data['answer']
 
-    # Retrieve the test answer from the session
-    test_answer = session.get('test_answer')
+    # test_question = session.get('test_question')
+    # # Retrieve the test answer from the session
+    # test_answer = session.get('test_answer')
 
-    # # Assuming you have a specific question ID for which you want to retrieve the answer
-    # question_id = 1
-
-    # # Retrieve the answer_text from the database for the given question ID
-    # question = Question.query.filter_by(id=question_id).first()
-    # if question:
-    #     test_answer = question.answer_text
-    # else:
-    #     test_answer = None
-
-    # Generate a prompt based on the user's answer and test answer
-    # (please check the helper function for implementations)
-    query = helper_func.set_eval_prompt_template(user_answer, test_answer)
-
-    # Get query results using a helper function based on the provided pdf_qa and query
-    # (please check the helper function for implementations)
-    results = helper_func.get_query_results(pdf_qa, query)
+    test_question, test_answer = retrieve_data()
 
     try:
-        sections = re.split(r'\b(?:1\.|2\.)\s*', results)
+        result = chain.invoke({"answer": user_answer, "test_question": test_question, "test_answer": test_answer})
+    except Exception as e:
+        result={}
+        result['knowledge_understood'] = False
+        result['knowledge_confidence'] = 0
 
-        # Remove empty parts
-        sections = [part.strip() for part in sections if part.strip()]
-
-        # Assign each section to a separate variable
-        knowledge_understood = bool(sections[0].strip())  # Remove the numbering and leading/trailing whitespace
-        knowledge_confidence = sections[1].strip()  # prefix and leading/trailing whitespace
-
-    except:
-        # Assign default values
-        knowledge_understood = False
-        knowledge_confidence = 0
 
     # Return the knowledge understood and confidence level in JSON format
-    return jsonify({'knowledge_understood': knowledge_understood, \
-                    'knowledge_confidence': knowledge_confidence})
+    return jsonify({'knowledge_understood': result["knowledge_understood"], \
+                    'knowledge_confidence': result["knowledge_confidence"]})
 
 # Check if the script is being run directly as the main program
 if __name__ == '__main__':
     # Run the Flask application in debug mode
     app.run(debug=True)
+
+

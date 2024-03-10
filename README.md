@@ -41,7 +41,7 @@ Response definition for “evaluate/”:
 ## Getting Started
 1. Clone the repository, set up the conda environment, and install the required packages:
 ```
-git https://github.com/EmekaEzumezu/ai-ml-assessment.git
+git clone https://github.com/EmekaEzumezu/ai-ml-assessment.git
 cd ai-ml-assessment
 conda create --name myenv python=3.9
 conda activate myenv
